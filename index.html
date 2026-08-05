@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Firma segura de BountyBook</title>
+  <style>
+    body { font: 16px system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #17202a; }
+    .box { background: #f5f7fa; border: 1px solid #d7dde5; border-radius: 10px; padding: 1rem; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: white; padding: .8rem; border-radius: 6px; }
+    button { padding: .7rem 1rem; border: 0; border-radius: 6px; cursor: pointer; background: #175cd3; color: white; }
+    textarea { width: 100%; min-height: 100px; margin-top: .8rem; }
+    .warning { color: #8a2b0b; }
+  </style>
+</head>
+<body>
+  <h1>Firma de inicio de sesión</h1>
+  <p>Esta página solo solicita una firma de mensaje. No puede enviar fondos ni leer tu frase semilla.</p>
+  <div class="box">
+    <strong>Wallet esperada</strong>
+    <pre id="address">Cargando…</pre>
+    <strong>Mensaje exacto</strong>
+    <pre id="message">Cargando…</pre>
+  </div>
+  <p class="warning">Cancela si la wallet muestra “Send”, “Approve”, “Permit”, un destinatario o una cantidad.</p>
+  <button id="sign" type="button">Conectar y firmar mensaje</button>
+  <p id="status" role="status"></p>
+  <label for="signature">Firma (cópiala solo cuando termine):</label>
+  <textarea id="signature" readonly></textarea>
+  <button id="copy" type="button" hidden>Copiar firma</button>
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const expected = (params.get('address') || '').trim();
+      const message = params.get('message') || '';
+      const address = document.getElementById('address');
+      const messageBox = document.getElementById('message');
+      const status = document.getElementById('status');
+      const output = document.getElementById('signature');
+      const sign = document.getElementById('sign');
+      const copy = document.getElementById('copy');
+      address.textContent = expected || 'Falta la dirección en el enlace';
+      messageBox.textContent = message || 'Falta el mensaje en el enlace';
+
+      const utf8Hex = (value) => {
+        const bytes = new TextEncoder().encode(value);
+        return '0x' + Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+      };
+
+      sign.addEventListener('click', async () => {
+        try {
+          if (!expected || !message) throw new Error('El enlace no contiene dirección y mensaje completos.');
+          if (!window.ethereum) throw new Error('Abre este enlace dentro del explorador de Base App.');
+          sign.disabled = true;
+          status.textContent = 'Solicitando conexión a Base App…';
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          const account = accounts[0];
+          if (!account || account.toLowerCase() !== expected.toLowerCase()) {
+            throw new Error('La cuenta seleccionada no coincide con la dirección esperada.');
+          }
+          status.textContent = 'Revisa el mensaje en Base App y pulsa Firmar.';
+          const signature = await window.ethereum.request({
+            method: 'personal_sign',
+            params: [utf8Hex(message), account],
+          });
+          output.value = signature;
+          copy.hidden = false;
+          status.textContent = 'Firma completada. No compartas ninguna frase semilla.';
+        } catch (error) {
+          status.textContent = error && error.message ? error.message : 'La firma fue cancelada.';
+          sign.disabled = false;
+        }
+      });
+
+      copy.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(output.value);
+        status.textContent = 'Firma copiada.';
+      });
+    })();
+  </script>
+</body>
+</html>
